@@ -26,4 +26,9 @@ public class MessageServiceImpl implements MessageService {
                 new EntityNotFoundException("Пользователь с id = " + messageDto.getUserId() + " не найден"));
         messageRepository.save(MessageMapper.dtoToMessage(messageDto, user));
     }
+
+    @Override
+    public boolean isContainsPhraseStart(Long idUser, String phrase) {
+        return messageRepository.existsByUser_IdAndTextInLikeIgnoreCase(idUser, phrase);
+    }
 }

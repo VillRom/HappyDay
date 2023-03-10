@@ -1,11 +1,13 @@
 package ru.romanchev.happyday.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
+import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.romanchev.happyday.config.BotConfig;
 import ru.romanchev.happyday.dto.MessageDto;
@@ -19,8 +21,13 @@ import java.util.List;
 
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class TelegramBot extends TelegramLongPollingBot {
+
+    private static final String TEXT_HELP = "Этот бот создан для улучшения вашего настроения \uD83D\uDC4D.\n" +
+            "Бот содержит множество мотивирующих фраз, которые вы можете получить, отправив команду  - /happy боту.\n" +
+            "Слева от поля ввода текста вы увидите меню, там лежат доступные команды. Со временем их будет становиться " +
+            "больше. \uD83D\uDE09\n\nБот развивается, поэтому буду рад вашему фидбэку и пожеланиям. Их вы можете " +
+            "прислать на почту happy_day_bot@bk.ru";
 
     private final HappyRepository repository;
 
@@ -30,11 +37,26 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final MessageService messageService;
 
-    /*public TelegramBot(BotConfig config, HappyRepository repository, UserService userService) {
-        this.config = config;
+    public TelegramBot(HappyRepository repository, BotConfig config, UserService userService,
+                       MessageService messageService) {
         this.repository = repository;
+        this.config = config;
         this.userService = userService;
-    }*/
+        this.messageService = messageService;
+        List<BotCommand> botCommandList = new ArrayList<>();
+        botCommandList.add(new BotCommand("/start", "Is command run bot"));
+        botCommandList.add(new BotCommand("/happy", "Get happy phrase"));
+        botCommandList.add(new BotCommand("/info", "Help use this bot"));
+        //TODO botCommandList.add(new BotCommand("/mydata", "Get your data store"));
+        //TODO botCommandList.add(new BotCommand("/deletedata", "Delete my data"));
+        //TODO botCommandList.add(new BotCommand("/settings", "Set your preferences"));
+        try{
+            this.execute(new SetMyCommands(botCommandList, new BotCommandScopeDefault(), null));
+        } catch (TelegramApiException e) {
+            log.error("Error setting bot's command list" + e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
 
     @Override
     public String getBotToken() {
@@ -56,19 +78,28 @@ public class TelegramBot extends TelegramLongPollingBot {
             String nikName = update.getMessage().getChat().getUserName();
             Long userId = update.getMessage().getFrom().getId();
             saveUser(nameUser, lastName, nikName, chatId, userId);
-            switch (requestText) {
-                case "/start":
-                    log.info("Пришло сообщение /start от {}", nameUser);
-                    saveMessage(requestText, startCommand(chatId, nameUser), userId, update.getMessage().getDate());
-                    break;
-                case "/happy":
-                    log.info("Пришло сообщение /happy от {}", nameUser);
-                    saveMessage(requestText, happyCommand(chatId), userId, update.getMessage().getDate());
-                    break;
-                default:
-                    log.info("От {} пришло неопознанное сообщение с текстом:\n{}", nameUser, requestText);
-                    sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
-                            "пожалуйста используйте эти команды:\n/happy");
+            if (isZhim(requestText)) {
+                log.info("От {} пришло сообщение с текстом:\n{}", nameUser, requestText);
+                sendMessage(chatId, "Лох\nНо это тайна \uD83E\uDD2B");
+            } else {
+                switch (requestText) {
+                    case "/start":
+                        log.info("Пришло сообщение /start от {}", nameUser);
+                        saveMessage(requestText, startCommand(chatId, nameUser, userId), userId, update.getMessage().getDate());
+                        break;
+                    case "/happy":
+                        log.info("Пришло сообщение /happy от {}", nameUser);
+                        saveMessage(requestText, happyCommand(chatId), userId, update.getMessage().getDate());
+                        break;
+                    case "/info":
+                        log.info("Пришло сообщение /info от {}", nameUser);
+                        sendMessage(chatId, TEXT_HELP);
+                        break;
+                    default:
+                        log.info("От {} пришло неопознанное сообщение с текстом:\n{}", nameUser, requestText);
+                        sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
+                                "пожалуйста используйте эти команды:\n/happy");
+                }
             }
         } else {
             Long chatId = update.getMessage().getChatId();
@@ -80,11 +111,20 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
                     "пожалуйста используйте эти команды:\n/happy");
         }
+    }//ToDo Не забудь сделать новую ветку!!!!!!!!!
+
+    private boolean isZhim(String requestText) {
+        return !requestText.matches(".*\\s.*") && requestText.toLowerCase().contains("жимб");
     }
 
-    private String startCommand(Long chatId, String name) {
-        String response = "Привет " + name + ", рад видеть тебя!\nПока что у меня есть одна команда - /happy\n" +
-                "Напиши её мне - узнаешь что произойдет)";
+    private String startCommand(Long chatId, String name, Long userId) {
+        String response;
+        if (messageService.isContainsPhraseStart(userId, "/start")) {
+            response = name + ", рад видеть тебя снова! Скорее выбирай свою фразу дня - /happy";
+        } else {
+            response = "Привет " + name + ", рад видеть тебя!\nПока что у меня есть одна команда - \n/happy\n" +
+                    "Напиши её мне - узнаешь что произойдет)";
+        }
         sendMessage(chatId, response);
         return response;
     }
