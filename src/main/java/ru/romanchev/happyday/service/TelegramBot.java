@@ -8,6 +8,8 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.romanchev.happyday.config.BotConfig;
 import ru.romanchev.happyday.dto.MessageDto;
@@ -29,6 +31,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             "больше. \uD83D\uDE09\n\nБот развивается, поэтому буду рад вашему фидбэку и пожеланиям. Их вы можете " +
             "прислать на почту happy_day_bot@bk.ru";
 
+    private static final String GET_HAPPY = "GET_HAPPY";
+
     private final HappyRepository repository;
 
     private final BotConfig config;
@@ -44,9 +48,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         this.userService = userService;
         this.messageService = messageService;
         List<BotCommand> botCommandList = new ArrayList<>();
-        botCommandList.add(new BotCommand("/start", "Is command run bot"));
-        botCommandList.add(new BotCommand("/happy", "Get happy phrase"));
-        botCommandList.add(new BotCommand("/info", "Help use this bot"));
+        botCommandList.add(new BotCommand("/start", "Команда для запуска бота"));
+        botCommandList.add(new BotCommand("/happy", "Получить мотивирующую фразу"));
+        botCommandList.add(new BotCommand("/info", "Описание бота"));
         //TODO botCommandList.add(new BotCommand("/mydata", "Get your data store"));
         //TODO botCommandList.add(new BotCommand("/deletedata", "Delete my data"));
         //TODO botCommandList.add(new BotCommand("/settings", "Set your preferences"));
@@ -76,8 +80,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             String nameUser = update.getMessage().getChat().getFirstName();
             String lastName = update.getMessage().getChat().getLastName();
             String nikName = update.getMessage().getChat().getUserName();
-            Long userId = update.getMessage().getFrom().getId();
-            saveUser(nameUser, lastName, nikName, chatId, userId);
+            saveUser(nameUser, lastName, nikName, chatId);
             if (isZhim(requestText)) {
                 log.info("От {} пришло сообщение с текстом:\n{}", nameUser, requestText);
                 sendMessage(chatId, "Лох\nНо это тайна \uD83E\uDD2B");
@@ -85,11 +88,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                 switch (requestText) {
                     case "/start":
                         log.info("Пришло сообщение /start от {}", nameUser);
-                        saveMessage(requestText, startCommand(chatId, nameUser, userId), userId, update.getMessage().getDate());
+                        saveMessage(requestText, startCommand(chatId, nameUser), chatId, update.getMessage().getDate());
                         break;
                     case "/happy":
                         log.info("Пришло сообщение /happy от {}", nameUser);
-                        saveMessage(requestText, happyCommand(chatId), userId, update.getMessage().getDate());
+                        happyCommand(requestText, update.getMessage().getDate(), chatId);
                         break;
                     case "/info":
                         log.info("Пришло сообщение /info от {}", nameUser);
@@ -101,13 +104,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 "пожалуйста используйте эти команды:\n/happy");
                 }
             }
+        } else if (update.hasCallbackQuery()) {
+            String callbackData = update.getCallbackQuery().getData();
+            Long chatId = update.getCallbackQuery().getMessage().getChatId();
+            if (callbackData.equals(GET_HAPPY)) {
+                log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /happy", update.getCallbackQuery()
+                        .getFrom().getFirstName());
+                happyCommand("Нажата кнопка - Ещё \uD83D\uDC47", update.getCallbackQuery().getMessage().getDate(),
+                        chatId);
+            }
         } else {
             Long chatId = update.getMessage().getChatId();
-            String nameUser = update.getMessage().getChat().getFirstName();
-            String lastName = update.getMessage().getChat().getLastName();
-            String nikName = update.getMessage().getChat().getUserName();
-            Long userId = update.getMessage().getFrom().getId();
-            saveUser(nameUser, lastName, nikName, chatId, userId);
             sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
                     "пожалуйста используйте эти команды:\n/happy");
         }
@@ -117,9 +124,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         return !requestText.matches(".*\\s.*") && requestText.toLowerCase().contains("жимб");
     }
 
-    private String startCommand(Long chatId, String name, Long userId) {
+    private String startCommand(Long chatId, String name) {
         String response;
-        if (messageService.isContainsPhraseStart(userId, "/start")) {
+        if (messageService.isContainsPhraseStart(chatId, "/start")) {
             response = name + ", рад видеть тебя снова! Скорее выбирай свою фразу дня - /happy";
         } else {
             response = "Привет " + name + ", рад видеть тебя!\nПока что у меня есть одна команда - \n/happy\n" +
@@ -129,11 +136,34 @@ public class TelegramBot extends TelegramLongPollingBot {
         return response;
     }
 
-    private String happyCommand(Long chatId) {
-        String response = "Твоя фраза на сегодня:\n" + "\uD83D\uDC4C" + getHappyPhrases(new File("Phrases.txt")) +
-                "👌" + "\nНе стесняйся, попробуй ещё раз - /happy";
-        sendMessage(chatId, response);
-        return response;
+    private void happyCommand(String textIn, Integer date, Long chatId) {
+        String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases(new File("Phrases.txt")) +
+                "👌 \nНе стесняйся, нажимай ещё - /happy\nИли кликай кнопку ниже \uD83D\uDC47";
+        try {
+            execute(happyKeyboard(chatId, response));
+        } catch (TelegramApiException e) {
+            throw new RuntimeException(e);
+        }
+        saveMessage(textIn, response, chatId, date);
+    }
+
+    private SendMessage happyKeyboard(Long chatId, String text) {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(String.valueOf(chatId));
+        sendMessage.setText(text);
+
+        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+        List<InlineKeyboardButton> rowInLine = new ArrayList<>();
+        var button = new InlineKeyboardButton();
+        button.setText("Ещё \uD83E\uDD17");
+        button.setCallbackData(GET_HAPPY);
+
+        rowInLine.add(button);
+        rowsInline.add(rowInLine);
+        keyboardMarkup.setKeyboard(rowsInline);
+        sendMessage.setReplyMarkup(keyboardMarkup);
+        return sendMessage;
     }
 
     private void sendMessage(Long chatId, String textToSend) {
@@ -150,7 +180,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private String getHappyPhrases(File file) {
         int number;
         if (!repository.getHappyPhrases().isEmpty()) {
-            number = (int) (Math.random() * repository.getHappyPhrases().size());
+            number = (int) (Math.random() * repository.getHappyPhrases().size() + 1);
             return repository.getHappyPhrases().get(number);
         } else {
             try (BufferedReader br = new BufferedReader(new FileReader(file))) {
@@ -167,10 +197,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void saveUser(String firstName, String lastName, String nikName, Long chatId, Long userId) {
+    private void saveUser(String firstName, String lastName, String nikName, Long userId) {
         UserDto dto = new UserDto();
         dto.setId(userId);
-        dto.setChatId(chatId);
         dto.setFirstName(firstName);
         dto.setLastName(lastName);
         dto.setNikName(nikName);

@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS users
     first_name VARCHAR(50),
     last_name VARCHAR(50),
     nik_name VARCHAR(100),
-    chat_id BIGINT,
     CONSTRAINT pk_user PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS message

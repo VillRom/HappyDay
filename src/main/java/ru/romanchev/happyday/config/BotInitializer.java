@@ -1,6 +1,5 @@
 package ru.romanchev.happyday.config;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -12,8 +11,12 @@ import ru.romanchev.happyday.service.TelegramBot;
 @Component
 public class BotInitializer {
 
-    @Autowired
+    final
     TelegramBot bot;
+
+    public BotInitializer(TelegramBot bot) {
+        this.bot = bot;
+    }
 
     @EventListener({ContextRefreshedEvent.class})
     public void init() throws TelegramApiException {

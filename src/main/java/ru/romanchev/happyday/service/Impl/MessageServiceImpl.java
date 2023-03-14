@@ -1,4 +1,4 @@
-package ru.romanchev.happyday.service;
+package ru.romanchev.happyday.service.Impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,6 +8,7 @@ import ru.romanchev.happyday.mapper.MessageMapper;
 import ru.romanchev.happyday.model.User;
 import ru.romanchev.happyday.repository.MessageRepository;
 import ru.romanchev.happyday.repository.UserRepository;
+import ru.romanchev.happyday.service.MessageService;
 
 import javax.persistence.EntityNotFoundException;
 

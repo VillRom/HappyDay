@@ -1,4 +1,4 @@
-package ru.romanchev.happyday.service;
+package ru.romanchev.happyday.service.Impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -6,11 +6,14 @@ import org.springframework.stereotype.Service;
 import ru.romanchev.happyday.dto.UserDto;
 import ru.romanchev.happyday.mapper.UserMapper;
 import ru.romanchev.happyday.repository.UserRepository;
+import ru.romanchev.happyday.service.UserService;
+
+import javax.persistence.EntityNotFoundException;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserServiceImpl implements UserService{
+public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
 
@@ -21,5 +24,11 @@ public class UserServiceImpl implements UserService{
             return;
         }
         userRepository.save(UserMapper.dtoToUser(user));
+    }
+
+    @Override
+    public UserDto getUserById(Long userId) {
+        return UserMapper.userToDto(userRepository.findById(userId).orElseThrow(() ->
+                new EntityNotFoundException("Пользователь на найден")));
     }
 }
