@@ -4,6 +4,9 @@ import lombok.experimental.UtilityClass;
 import ru.romanchev.happyday.dto.UserDto;
 import ru.romanchev.happyday.model.User;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @UtilityClass
 public class UserMapper {
 
@@ -23,5 +26,9 @@ public class UserMapper {
         userdto.setLastName(user.getLastName());
         userdto.setNikName(user.getNikName());
         return userdto;
+    }
+
+    public static List<UserDto> usersToUsersDto(List<User> users) {
+        return users.stream().map(UserMapper::userToDto).collect(Collectors.toList());
     }
 }

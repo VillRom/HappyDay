@@ -9,6 +9,7 @@ import ru.romanchev.happyday.repository.UserRepository;
 import ru.romanchev.happyday.service.UserService;
 
 import javax.persistence.EntityNotFoundException;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,5 +31,15 @@ public class UserServiceImpl implements UserService {
     public UserDto getUserById(Long userId) {
         return UserMapper.userToDto(userRepository.findById(userId).orElseThrow(() ->
                 new EntityNotFoundException("Пользователь на найден")));
+    }
+
+    @Override
+    public List<UserDto> getAllUsersWithoutAdmin(Long idAdmin) {
+        return UserMapper.usersToUsersDto(userRepository.findAllByIdNot(idAdmin));
+    }
+
+    @Override
+    public List<Long> getAllUsersIdWithoutAdminId(Long idAdmin) {
+        return userRepository.findAllUsersId(idAdmin);
     }
 }

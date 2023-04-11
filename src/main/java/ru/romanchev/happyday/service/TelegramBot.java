@@ -51,9 +51,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         botCommandList.add(new BotCommand("/start", "Команда для запуска бота"));
         botCommandList.add(new BotCommand("/happy", "Получить мотивирующую фразу"));
         botCommandList.add(new BotCommand("/info", "Описание бота"));
-        //TODO botCommandList.add(new BotCommand("/mydata", "Get your data store"));
-        //TODO botCommandList.add(new BotCommand("/deletedata", "Delete my data"));
-        //TODO botCommandList.add(new BotCommand("/settings", "Set your preferences"));
         try{
             this.execute(new SetMyCommands(botCommandList, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -80,14 +77,19 @@ public class TelegramBot extends TelegramLongPollingBot {
             String nameUser = update.getMessage().getChat().getFirstName();
             String lastName = update.getMessage().getChat().getLastName();
             String nikName = update.getMessage().getChat().getUserName();
-            saveUser(nameUser, lastName, nikName, chatId);
-            if (isZhim(requestText)) {
-                log.info("От {} пришло сообщение с текстом:\n{}", nameUser, requestText);
-                sendMessage(chatId, "Лох\nНо это тайна \uD83E\uDD2B");
+            if (requestText.startsWith("/sendAllTheUsers") && chatId.equals(config.getAdminId())) {
+                var textToSend = requestText.substring(requestText.indexOf(" "));
+                List<UserDto> users = userService.getAllUsersWithoutAdmin(chatId);
+                for (UserDto user : users) {
+                    sendMessageWithKeyboard(oneButtonOnKeyboard(user.getId(), textToSend, "Клац 🤗"));
+                    log.info("Пользователю {} отправлено сообщение - '{}'", user.getFirstName(), textToSend);
+                }
+                sendMessage(config.getAdminId(), "Рассылка отправлена.");
             } else {
                 switch (requestText) {
                     case "/start":
                         log.info("Пришло сообщение /start от {}", nameUser);
+                        saveUser(nameUser, lastName, nikName, chatId);
                         saveMessage(requestText, startCommand(chatId, nameUser), chatId, update.getMessage().getDate());
                         break;
                     case "/happy":
@@ -104,6 +106,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 "пожалуйста используйте эти команды:\n/happy");
                 }
             }
+        } else if (update.hasMessage() && update.getMessage().hasContact() && update.getMessage().getFrom()
+                .getId().equals(config.getAdminId())) {
+            saveUser(update.getMessage().getContact().getFirstName(), update.getMessage().getContact().getLastName(),
+                    update.getMessage().getContact().getFirstName(), update.getMessage().getContact().getUserId());
+            sendMessage(config.getAdminId(), "Контакт сохранен");
         } else if (update.hasCallbackQuery()) {
             String callbackData = update.getCallbackQuery().getData();
             Long chatId = update.getCallbackQuery().getMessage().getChatId();
@@ -118,10 +125,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
                     "пожалуйста используйте эти команды:\n/happy");
         }
-    }//ToDo Не забудь сделать новую ветку!!!!!!!!!
-
-    private boolean isZhim(String requestText) {
-        return !requestText.matches(".*\\s.*") && requestText.toLowerCase().contains("жимб");
     }
 
     private String startCommand(Long chatId, String name) {
@@ -140,14 +143,14 @@ public class TelegramBot extends TelegramLongPollingBot {
         String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases(new File("Phrases.txt")) +
                 "👌 \nНе стесняйся, нажимай ещё - /happy\nИли кликай кнопку ниже \uD83D\uDC47";
         try {
-            execute(happyKeyboard(chatId, response));
+            execute(oneButtonOnKeyboard(chatId, response, "Ещё \uD83E\uDD17"));
         } catch (TelegramApiException e) {
             throw new RuntimeException(e);
         }
         saveMessage(textIn, response, chatId, date);
     }
 
-    private SendMessage happyKeyboard(Long chatId, String text) {
+    private SendMessage oneButtonOnKeyboard(Long chatId, String text, String textButton) {
         SendMessage sendMessage = new SendMessage();
         sendMessage.setChatId(String.valueOf(chatId));
         sendMessage.setText(text);
@@ -156,7 +159,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
         List<InlineKeyboardButton> rowInLine = new ArrayList<>();
         var button = new InlineKeyboardButton();
-        button.setText("Ещё \uD83E\uDD17");
+        button.setText(textButton);
         button.setCallbackData(GET_HAPPY);
 
         rowInLine.add(button);
@@ -177,10 +180,18 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    private void sendMessageWithKeyboard(SendMessage message) {
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private String getHappyPhrases(File file) {
         int number;
         if (!repository.getHappyPhrases().isEmpty()) {
-            number = (int) (Math.random() * repository.getHappyPhrases().size() + 1);
+            number = (int) (Math.random() * repository.getHappyPhrases().size());
             return repository.getHappyPhrases().get(number);
         } else {
             try (BufferedReader br = new BufferedReader(new FileReader(file))) {
@@ -189,7 +200,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     newPhrases.add(br.readLine());
                 }
                 repository.setHappyPhrases(newPhrases);
-                number = (int) (Math.random() * repository.getHappyPhrases().size() + 1);
+                number = (int) (Math.random() * repository.getHappyPhrases().size());
                 return repository.getHappyPhrases().get(number);
             } catch (IOException e) {
                 throw new RuntimeException(e);

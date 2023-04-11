@@ -13,4 +13,7 @@ public class BotConfig {
 
     @Value(value = "${bot.key}")
     private String botKey;
+
+    @Value(value = "${admin.bot.id}")
+    private Long adminId;
 }
