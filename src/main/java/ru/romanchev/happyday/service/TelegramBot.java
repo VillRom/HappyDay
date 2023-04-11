@@ -14,9 +14,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.romanchev.happyday.config.BotConfig;
 import ru.romanchev.happyday.dto.MessageDto;
 import ru.romanchev.happyday.dto.UserDto;
-import ru.romanchev.happyday.repository.HappyRepository;
 
-import java.io.*;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -33,20 +31,20 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private static final String GET_HAPPY = "GET_HAPPY";
 
-    private final HappyRepository repository;
-
     private final BotConfig config;
 
     private final UserService userService;
 
     private final MessageService messageService;
 
-    public TelegramBot(HappyRepository repository, BotConfig config, UserService userService,
-                       MessageService messageService) {
-        this.repository = repository;
+    private final PhraseService phraseService;
+
+    public TelegramBot(BotConfig config, UserService userService,
+                       MessageService messageService, PhraseService phraseService) {
         this.config = config;
         this.userService = userService;
         this.messageService = messageService;
+        this.phraseService = phraseService;
         List<BotCommand> botCommandList = new ArrayList<>();
         botCommandList.add(new BotCommand("/start", "Команда для запуска бота"));
         botCommandList.add(new BotCommand("/happy", "Получить мотивирующую фразу"));
@@ -85,6 +83,8 @@ public class TelegramBot extends TelegramLongPollingBot {
                     log.info("Пользователю {} отправлено сообщение - '{}'", user.getFirstName(), textToSend);
                 }
                 sendMessage(config.getAdminId(), "Рассылка отправлена.");
+            } else if (requestText.startsWith("/update") && chatId.equals(config.getAdminId())) {
+                sendMessage(chatId, updatePhrasesDbFromFile());
             } else {
                 switch (requestText) {
                     case "/start":
@@ -127,6 +127,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
+    private String updatePhrasesDbFromFile() {
+        return phraseService.updatePhrases();
+    }
+
     private String startCommand(Long chatId, String name) {
         String response;
         if (messageService.isContainsPhraseStart(chatId, "/start")) {
@@ -140,7 +144,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void happyCommand(String textIn, Integer date, Long chatId) {
-        String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases(new File("Phrases.txt")) +
+        String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases() +
                 "👌 \nНе стесняйся, нажимай ещё - /happy\nИли кликай кнопку ниже \uD83D\uDC47";
         try {
             execute(oneButtonOnKeyboard(chatId, response, "Ещё \uD83E\uDD17"));
@@ -188,24 +192,8 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private String getHappyPhrases(File file) {
-        int number;
-        if (!repository.getHappyPhrases().isEmpty()) {
-            number = (int) (Math.random() * repository.getHappyPhrases().size());
-            return repository.getHappyPhrases().get(number);
-        } else {
-            try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-                List<String> newPhrases = new ArrayList<>();
-                while (br.ready()) {
-                    newPhrases.add(br.readLine());
-                }
-                repository.setHappyPhrases(newPhrases);
-                number = (int) (Math.random() * repository.getHappyPhrases().size());
-                return repository.getHappyPhrases().get(number);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
+    private String getHappyPhrases() {
+        return phraseService.getRandomPhrase().getTextPhrase();
     }
 
     private void saveUser(String firstName, String lastName, String nikName, Long userId) {
