@@ -47,10 +47,17 @@ public class JokeServiceImpl implements JokeService {
 
     @Override
     public JokeDto getRandomJoke() {
+        long  u = jokeRepository.count();
+        Long ran = randomNumberId();
+        //if (jokeRepository.count() == 0) return new JokeDto();
         return JokeMapper.jokeToDto(jokeRepository.findById(randomNumberId()).orElse(new Joke()));
+        //return JokeMapper.jokeToDto(jokeRepository.findRandomJoke());
     }
 
     private Long randomNumberId() {
-        return (long) new Random().nextInt((int) jokeRepository.count()) + 1;
+        List<Long> idJokes = jokeRepository.findAllIds();
+        if (idJokes.isEmpty()) return 0L;
+        return idJokes.get(new Random().nextInt(idJokes.size()));
+       // return (long) new Random().nextInt((int) jokeRepository.count()) + 1;
     }
 }

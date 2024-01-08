@@ -38,16 +38,19 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final UserService userService;
 
+    private final CallBackQueryService callbackQueryService;
+
     private final MessageService messageService;
 
     private final PhraseService phraseService;
 
     private final JokeService jokeService;
 
-    public TelegramBot(BotConfig config, UserService userService,
-                       MessageService messageService, PhraseService phraseService, JokeService jokeService) {
+    public TelegramBot(BotConfig config, UserService userService, CallBackQueryService callbackQueryService, MessageService messageService,
+                       PhraseService phraseService, JokeService jokeService) {
         this.config = config;
         this.userService = userService;
+        this.callbackQueryService = callbackQueryService;
         this.messageService = messageService;
         this.phraseService = phraseService;
         this.jokeService = jokeService;
@@ -86,7 +89,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 var textToSend = requestText.substring(requestText.indexOf(" "));
                 List<UserDto> users = userService.getAllUsersWithoutAdmin(chatId);
                 for (UserDto user : users) {
-                    sendMessageWithKeyboard(twoButtonHappyAndJokeOnKeyboard(user.getId(), textToSend));
+                    sendMessage(twoButtonHappyAndJokeOnKeyboard(user.getId(), textToSend));
                     log.info("Пользователю {} отправлено сообщение - '{}'", user.getFirstName(), textToSend);
                 }
                 sendMessage(config.getAdminId(), "Рассылка отправлена.");
@@ -127,19 +130,18 @@ public class TelegramBot extends TelegramLongPollingBot {
                     update.getMessage().getContact().getFirstName(), update.getMessage().getContact().getUserId());
             sendMessage(config.getAdminId(), "Контакт сохранен");
         } else if (update.hasCallbackQuery()) {
+            callbackQueryService.setCallbackQuery(update.getCallbackQuery());
             String callbackData = update.getCallbackQuery().getData();
             Long chatId = update.getCallbackQuery().getMessage().getChatId();
             if (callbackData.equals(GET_HAPPY)) {
-                log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /happy", update.getCallbackQuery()
-                        .getFrom().getFirstName());
-                happyCommand("Нажата кнопка - Ещё \uD83D\uDC47", update.getCallbackQuery().getMessage().getDate(),
-                        chatId);
+                sendMessage(callbackQueryService.getHappy());
             }
             if (callbackData.equals(GET_JOKE)) {
-                log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /joke", update.getCallbackQuery()
+                /*log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /joke", update.getCallbackQuery()
                         .getFrom().getFirstName());
                 jokeCommand("Нажата кнопка - Ещё \uD83D\uDC47", update.getCallbackQuery().getMessage().getDate(),
-                        chatId);
+                        chatId);*/
+                sendMessage(callbackQueryService.getJoke());
             }
         } else {
             Long chatId = update.getMessage().getChatId();
@@ -245,7 +247,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessageWithKeyboard(SendMessage message) {
+    private void sendMessage(SendMessage message) {
         try {
             execute(message);
         } catch (TelegramApiException e) {
