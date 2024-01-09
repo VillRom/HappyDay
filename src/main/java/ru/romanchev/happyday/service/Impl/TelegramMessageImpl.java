@@ -5,28 +5,27 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import ru.romanchev.happyday.dto.MessageDto;
 import ru.romanchev.happyday.model.CallBackDates;
-import ru.romanchev.happyday.service.CallBackQueryService;
 import ru.romanchev.happyday.service.JokeService;
 import ru.romanchev.happyday.service.MessageService;
 import ru.romanchev.happyday.service.PhraseService;
+import ru.romanchev.happyday.service.TelegramMessage;
 
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 @Service
-@Data
 @RequiredArgsConstructor
+@Data
 @Slf4j
-public class CallbackQueryImpl implements CallBackQueryService {
+public class TelegramMessageImpl implements TelegramMessage {
 
-    private CallbackQuery callbackQuery;
-
+    private Message message;
     private final PhraseService phraseService;
 
     private final MessageService messageService;
@@ -35,14 +34,12 @@ public class CallbackQueryImpl implements CallBackQueryService {
 
     @Override
     public SendMessage getHappy() {
-        log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /happy", callbackQuery
-                .getFrom().getFirstName());
+        log.info("Пришло сообщение /happy от {}", message.getChat().getFirstName());
         String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases() +
                 "👌 \nНе стесняйся, нажимай ещё - /happy\nИли кликай кнопку ниже \uD83D\uDC47";
-        saveMessage("Нажата кнопка - Ещё \uD83D\uDC47", response, callbackQuery.getMessage().getChatId(),
-                callbackQuery.getMessage().getDate());
+        saveMessage(message.getText(), response, message.getChatId(), message.getDate());
         SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(callbackQuery.getMessage().getChatId()));
+        sendMessage.setChatId(String.valueOf(message.getChatId()));
         sendMessage.setText(response);
         sendMessage.setReplyMarkup(oneButtonOnKeyboard(String.valueOf(CallBackDates.GET_HAPPY)));
         return sendMessage;
@@ -50,8 +47,7 @@ public class CallbackQueryImpl implements CallBackQueryService {
 
     @Override
     public SendMessage getJoke() {
-        log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /joke", callbackQuery.getFrom()
-                .getFirstName());
+        log.info("Пришло сообщение /joke от {}", message.getChat().getFirstName());
         String response;
         String textJoke = getRandomJoke();
         if (textJoke != null)
@@ -59,22 +55,21 @@ public class CallbackQueryImpl implements CallBackQueryService {
                     " - /joke\nИли кликай кнопку ниже \uD83D\uDC47";
         else response = "Извините, в данный момент база данных с анекдотами не заполнена, идет работа по наполнению.\n" +
                 "Спасибо за понимание.\nМожете воспользоваться командой - /happy";
-        saveMessage("Нажата кнопка - Ещё \uD83D\uDC47 под сообщением /joke", response, callbackQuery.getMessage().getChatId(),
-                callbackQuery.getMessage().getDate());
+        saveMessage(message.getText(), response, message.getChatId(), message.getDate());
         SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(callbackQuery.getMessage().getChatId()));
+        sendMessage.setChatId(String.valueOf(message.getChatId()));
         sendMessage.setText(response);
         if (response.startsWith("Получай")) sendMessage.setReplyMarkup(oneButtonOnKeyboard(String
                 .valueOf(CallBackDates.GET_JOKE)));
         return sendMessage;
     }
 
-    private String getHappyPhrases() {
-        return phraseService.getRandomPhrase().getTextPhrase();
-    }
-
     private String getRandomJoke() {
         return jokeService.getRandomJoke().getTextJoke();
+    }
+
+    private String getHappyPhrases() {
+        return phraseService.getRandomPhrase().getTextPhrase();
     }
 
     private void saveMessage(String textIn, String textTo, Long userId, Integer date) {
@@ -99,5 +94,4 @@ public class CallbackQueryImpl implements CallBackQueryService {
         keyboardMarkup.setKeyboard(rowsInline);
         return keyboardMarkup;
     }
-
 }

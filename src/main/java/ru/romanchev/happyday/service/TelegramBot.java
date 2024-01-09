@@ -15,6 +15,7 @@ import ru.romanchev.happyday.config.BotConfig;
 import ru.romanchev.happyday.dto.JokeDto;
 import ru.romanchev.happyday.dto.MessageDto;
 import ru.romanchev.happyday.dto.UserDto;
+import ru.romanchev.happyday.model.CallBackDates;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -30,15 +31,13 @@ public class TelegramBot extends TelegramLongPollingBot {
             "там лежат доступные команды. Со временем их будет становиться больше. \uD83D\uDE09\n\nБот развивается, " +
             "поэтому буду рад вашему фидбэку и пожеланиям. Их вы можете прислать на почту happy_day_bot@bk.ru";
 
-    private static final String GET_HAPPY = "GET_HAPPY";
-
-    private static final String GET_JOKE = "GET_JOKE";
-
     private final BotConfig config;
 
     private final UserService userService;
 
     private final CallBackQueryService callbackQueryService;
+
+    private final TelegramMessage telegramMessage;
 
     private final MessageService messageService;
 
@@ -46,11 +45,13 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final JokeService jokeService;
 
-    public TelegramBot(BotConfig config, UserService userService, CallBackQueryService callbackQueryService, MessageService messageService,
-                       PhraseService phraseService, JokeService jokeService) {
+    public TelegramBot(BotConfig config, UserService userService, CallBackQueryService callbackQueryService,
+                       TelegramMessage telegramMessage, MessageService messageService, PhraseService phraseService,
+                       JokeService jokeService) {
         this.config = config;
         this.userService = userService;
         this.callbackQueryService = callbackQueryService;
+        this.telegramMessage = telegramMessage;
         this.messageService = messageService;
         this.phraseService = phraseService;
         this.jokeService = jokeService;
@@ -80,6 +81,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
+            telegramMessage.setMessage(update.getMessage());
             Long chatId = update.getMessage().getChatId();
             String requestText = update.getMessage().getText();
             String nameUser = update.getMessage().getChat().getFirstName();
@@ -107,16 +109,14 @@ public class TelegramBot extends TelegramLongPollingBot {
                         saveMessage(requestText, startCommand(chatId, nameUser), chatId, update.getMessage().getDate());
                         break;
                     case "/happy":
-                        log.info("Пришло сообщение /happy от {}", nameUser);
-                        happyCommand(requestText, update.getMessage().getDate(), chatId);
+                        sendMessage(telegramMessage.getHappy());
                         break;
                     case "/info":
                         log.info("Пришло сообщение /info от {}", nameUser);
                         sendMessage(chatId, TEXT_HELP);
                         break;
                     case "/joke":
-                        log.info("Пришло сообщение /joke от {}", nameUser);
-                        jokeCommand(requestText, update.getMessage().getDate(), chatId);
+                        sendMessage(telegramMessage.getJoke());
                         break;
                     default:
                         log.info("От {} пришло неопознанное сообщение с текстом:\n{}", nameUser, requestText);
@@ -132,15 +132,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else if (update.hasCallbackQuery()) {
             callbackQueryService.setCallbackQuery(update.getCallbackQuery());
             String callbackData = update.getCallbackQuery().getData();
-            Long chatId = update.getCallbackQuery().getMessage().getChatId();
-            if (callbackData.equals(GET_HAPPY)) {
+            if (callbackData.equals(String.valueOf(CallBackDates.GET_HAPPY))) {
                 sendMessage(callbackQueryService.getHappy());
             }
-            if (callbackData.equals(GET_JOKE)) {
-                /*log.info("Пользователем  - {} нажата кнопка - 'Ещё' под сообщением /joke", update.getCallbackQuery()
-                        .getFrom().getFirstName());
-                jokeCommand("Нажата кнопка - Ещё \uD83D\uDC47", update.getCallbackQuery().getMessage().getDate(),
-                        chatId);*/
+            if (callbackData.equals(String.valueOf(CallBackDates.GET_JOKE))) {
                 sendMessage(callbackQueryService.getJoke());
             }
         } else {
@@ -166,53 +161,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         return response;
     }
 
-    private void happyCommand(String textIn, Integer date, Long chatId) {
-        String response = "Дарю тебе эту фразу:\n" + "\uD83D\uDC4C" + getHappyPhrases() +
-                "👌 \nНе стесняйся, нажимай ещё - /happy\nИли кликай кнопку ниже \uD83D\uDC47";
-        try {
-            execute(oneButtonOnKeyboard(chatId, response, GET_HAPPY));
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
-        }
-        saveMessage(textIn, response, chatId, date);
-    }
-
-    private void jokeCommand(String textIn, Integer date, Long chatId) {
-        String response;
-        String textJoke = getJoke();
-        if (textJoke != null) {
-            response = "Получай анекдот:\n" /*"\uD83D\uDC4C"*/ + textJoke +
-                    "\n --------\nНе стесняйся, нажимай ещё - /joke\nИли кликай кнопку ниже \uD83D\uDC47";
-        }
-        else response = "Извините, в данный момент база данных с анекдотами не заполнена, идет работа по наполнению.\n" +
-                "Спасибо за понимание.\nМожете воспользоваться командой - /happy";
-        try {
-            execute(oneButtonOnKeyboard(chatId, response, GET_JOKE));
-        } catch (TelegramApiException e) {
-            throw new RuntimeException(e);
-        }
-        saveMessage(textIn, response, chatId, date);
-    }
-
-    private SendMessage oneButtonOnKeyboard(Long chatId, String text, String callbackData) {
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(chatId));
-        sendMessage.setText(text);
-
-        InlineKeyboardMarkup keyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
-        List<InlineKeyboardButton> rowInLine = new ArrayList<>();
-        var button = new InlineKeyboardButton();
-        button.setText("Ещё \uD83E\uDD17");
-        button.setCallbackData(callbackData);
-
-        rowInLine.add(button);
-        rowsInline.add(rowInLine);
-        keyboardMarkup.setKeyboard(rowsInline);
-        sendMessage.setReplyMarkup(keyboardMarkup);
-        return sendMessage;
-    }
-
     private SendMessage twoButtonHappyAndJokeOnKeyboard(Long chatId, String text) {
         SendMessage sendMessage = new SendMessage();
         sendMessage.setChatId(String.valueOf(chatId));
@@ -223,10 +171,10 @@ public class TelegramBot extends TelegramLongPollingBot {
         List<InlineKeyboardButton> rowInLine = new ArrayList<>();
         var buttonHappy = new InlineKeyboardButton();
         buttonHappy.setText("Фраза");
-        buttonHappy.setCallbackData(GET_HAPPY);
+        buttonHappy.setCallbackData(String.valueOf(CallBackDates.GET_HAPPY));
         var buttonJoke = new InlineKeyboardButton();
         buttonJoke.setText("Анекдот");
-        buttonJoke.setCallbackData(GET_JOKE);
+        buttonJoke.setCallbackData(String.valueOf(CallBackDates.GET_JOKE));
 
         rowInLine.add(buttonHappy);
         rowInLine.add(buttonJoke);
@@ -253,14 +201,6 @@ public class TelegramBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private String getHappyPhrases() {
-        return phraseService.getRandomPhrase().getTextPhrase();
-    }
-
-    private String getJoke() {
-        return jokeService.getRandomJoke().getTextJoke();
     }
 
     private void saveUser(String firstName, String lastName, String nikName, Long userId) {
