@@ -10,4 +10,10 @@ public interface TelegramMessage {
     SendMessage getJoke();
 
     void setMessage(Message message);
+
+    SendMessage responseOnBotCommand();
+
+    SendMessage getInfo();
+
+    SendMessage getStart();
 }

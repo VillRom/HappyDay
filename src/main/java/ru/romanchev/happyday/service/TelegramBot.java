@@ -13,23 +13,15 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.romanchev.happyday.config.BotConfig;
 import ru.romanchev.happyday.dto.JokeDto;
-import ru.romanchev.happyday.dto.MessageDto;
 import ru.romanchev.happyday.dto.UserDto;
 import ru.romanchev.happyday.model.CallBackDates;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 @Component
 @Slf4j
 public class TelegramBot extends TelegramLongPollingBot {
-
-    private static final String TEXT_HELP = "Этот бот создан для улучшения вашего настроения \uD83D\uDC4D.\n" +
-            "Бот содержит множество мотивирующих фраз, которые вы можете получить, отправив команду  - /happy боту.\n" +
-            "Так же вы можете получить рандомный анекдот от бота по команде - /joke. Слева от поля ввода текста вы увидите меню, " +
-            "там лежат доступные команды. Со временем их будет становиться больше. \uD83D\uDE09\n\nБот развивается, " +
-            "поэтому буду рад вашему фидбэку и пожеланиям. Их вы можете прислать на почту happy_day_bot@bk.ru";
 
     private final BotConfig config;
 
@@ -39,20 +31,17 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final TelegramMessage telegramMessage;
 
-    private final MessageService messageService;
-
     private final PhraseService phraseService;
 
     private final JokeService jokeService;
 
     public TelegramBot(BotConfig config, UserService userService, CallBackQueryService callbackQueryService,
-                       TelegramMessage telegramMessage, MessageService messageService, PhraseService phraseService,
+                       TelegramMessage telegramMessage, PhraseService phraseService,
                        JokeService jokeService) {
         this.config = config;
         this.userService = userService;
         this.callbackQueryService = callbackQueryService;
         this.telegramMessage = telegramMessage;
-        this.messageService = messageService;
         this.phraseService = phraseService;
         this.jokeService = jokeService;
         List<BotCommand> botCommandList = new ArrayList<>();
@@ -84,9 +73,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             telegramMessage.setMessage(update.getMessage());
             Long chatId = update.getMessage().getChatId();
             String requestText = update.getMessage().getText();
-            String nameUser = update.getMessage().getChat().getFirstName();
-            String lastName = update.getMessage().getChat().getLastName();
-            String nikName = update.getMessage().getChat().getUserName();
             if (requestText.startsWith("/sendAllTheUsers") && chatId.equals(config.getAdminId())) {
                 var textToSend = requestText.substring(requestText.indexOf(" "));
                 List<UserDto> users = userService.getAllUsersWithoutAdmin(chatId);
@@ -102,27 +88,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 dto.setTextJoke(requestText.substring(requestText.indexOf(" ")));
                 sendMessage(chatId, jokeService.addJoke(dto));
             } else {
-                switch (requestText) {
-                    case "/start":
-                        log.info("Пришло сообщение /start от {}", nameUser);
-                        saveUser(nameUser, lastName, nikName, chatId);
-                        saveMessage(requestText, startCommand(chatId, nameUser), chatId, update.getMessage().getDate());
-                        break;
-                    case "/happy":
-                        sendMessage(telegramMessage.getHappy());
-                        break;
-                    case "/info":
-                        log.info("Пришло сообщение /info от {}", nameUser);
-                        sendMessage(chatId, TEXT_HELP);
-                        break;
-                    case "/joke":
-                        sendMessage(telegramMessage.getJoke());
-                        break;
-                    default:
-                        log.info("От {} пришло неопознанное сообщение с текстом:\n{}", nameUser, requestText);
-                        sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
-                                "пожалуйста используйте эти команды:\n/happy");
-                }
+                sendMessage(telegramMessage.responseOnBotCommand());
             }
         } else if (update.hasMessage() && update.getMessage().hasContact() && update.getMessage().getFrom()
                 .getId().equals(config.getAdminId())) {
@@ -147,18 +113,6 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private String updatePhrasesDbFromFile() {
         return phraseService.updatePhrases();
-    }
-
-    private String startCommand(Long chatId, String name) {
-        String response;
-        if (messageService.isContainsPhraseStart(chatId, "/start")) {
-            response = name + ", рад видеть тебя снова! Скорее выбирай свою фразу дня - /happy\nИли анекдот - /joke";
-        } else {
-            response = "Привет " + name + ", рад видеть тебя!\nСкорее выбирай свою фразу дня - /happy\n" +
-                    "Или анекдот - /joke";
-        }
-        sendMessage(chatId, response);
-        return response;
     }
 
     private SendMessage twoButtonHappyAndJokeOnKeyboard(Long chatId, String text) {
@@ -210,14 +164,5 @@ public class TelegramBot extends TelegramLongPollingBot {
         dto.setLastName(lastName);
         dto.setNikName(nikName);
         userService.addUser(dto);
-    }
-
-    private void saveMessage(String textIn, String textTo, Long userId, Integer date) {
-        MessageDto dto = new MessageDto();
-        dto.setDate(new Date(date.longValue() * 1000));
-        dto.setUserId(userId);
-        dto.setTextIn(textIn);
-        dto.setTextTo(textTo);
-        messageService.addMessageFromUser(dto);
     }
 }
