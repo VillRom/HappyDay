@@ -83,6 +83,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 sendMessage(config.getAdminId(), "Рассылка отправлена.");
             } else if (requestText.startsWith("/update") && chatId.equals(config.getAdminId())) {
                 sendMessage(chatId, updatePhrasesDbFromFile());
+                sendMessage(chatId, updateJokesFromWebsite());
             } else if (requestText.startsWith("/newJoke") && chatId.equals(config.getAdminId())) {
                 JokeDto dto = new JokeDto();
                 dto.setTextJoke(requestText.substring(requestText.indexOf(" ")));
@@ -109,6 +110,10 @@ public class TelegramBot extends TelegramLongPollingBot {
             sendMessage(chatId, "На данное сообщение мне нечем ответить, " +
                     "пожалуйста используйте эти команды:\n/happy");
         }
+    }
+
+    private String updateJokesFromWebsite() {
+        return jokeService.addJokesFromWebsite();
     }
 
     private String updatePhrasesDbFromFile() {

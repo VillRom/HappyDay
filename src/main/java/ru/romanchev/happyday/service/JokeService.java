@@ -10,6 +10,8 @@ public interface JokeService {
 
     void addJokes(List<JokeDto> jokeDtos);
 
+    String addJokesFromWebsite();
+
     JokeDto getJoke(Long jokeId);
 
     JokeDto getRandomJoke();
