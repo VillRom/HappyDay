@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -47,10 +49,9 @@ public class JokeServiceImpl implements JokeService {
     }
 
     @Override
-    @Transactional
     public String addJokesFromWebsite() {
         List<JokeDto> jokeDtos = parsingWebsite();
-        jokeRepository.saveAll(JokeMapper.dtosToJokes(jokeDtos));
+        addJokes(jokeDtos);
         return "Анекдоты добавлены в БД";
     }
 
@@ -65,7 +66,7 @@ public class JokeServiceImpl implements JokeService {
             for (Element el : elements){
                 if (el.childNodeSize() >= 2 && el.attributesSize() > 1) {
                     JokeDto dto = new JokeDto();
-                    dto.setTextJoke(stSb(el.child(1).text()));
+                    dto.setTextJoke(modificationOfTheStringForAnAnecdote(el.child(1).text()));
                     jokes.add(dto);
                 }
             }
@@ -92,21 +93,26 @@ public class JokeServiceImpl implements JokeService {
         return idJokes.get(new Random().nextInt(idJokes.size()));
     }
 
-    private String stSb(String s) {
+    private String modificationOfTheStringForAnAnecdote(String s) {
+        Pattern p =  Pattern.compile("\\p{Punct}");
         StringBuilder sb = new StringBuilder();
         int index;
         for (int i = 0; i < s.length(); i++) {
-            if (!s.contains("\\p{Punct} - ") && !s.contains("\\p{Punct} — ")) {
+            if (!s.contains(" - ") && !s.contains(" — ")) {
                 sb.append(s);
                 break;
             } else if (s.contains(" - ")) {
-                sb.append(s, 0, s.indexOf(" - ")).append("\n");
+                Matcher m = p.matcher(s.substring(s.indexOf(" - ") - 1, s.indexOf(" - ")));
+                sb.append(s, 0, s.indexOf(" - ")).append(" ");
                 index = s.indexOf(" - ") + 1;
                 s = s.substring(index);
+                if (m.find()) sb.append("\n");
             } else {
-                sb.append(s, 0, s.indexOf(" — ")).append("\n");
+                Matcher m = p.matcher(s.substring(0, s.indexOf(" — ")));
+                sb.append(s, 0, s.indexOf(" — ")).append(" ");
                 index = s.indexOf(" — ") + 1;
                 s = s.substring(index);
+                if (m.find()) sb.append("\n");
             }
         }
         return sb.toString();
