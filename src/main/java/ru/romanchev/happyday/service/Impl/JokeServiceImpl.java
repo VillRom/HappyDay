@@ -1,10 +1,10 @@
 package ru.romanchev.happyday.service.Impl;
 
-import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.romanchev.happyday.dto.JokeDto;
@@ -21,11 +21,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
-@RequiredArgsConstructor
-@Transactional(readOnly = true)
+@Transactional
 public class JokeServiceImpl implements JokeService {
 
     private final JokeRepository jokeRepository;
+
+    private List<Long> ids;
+
+    @Autowired
+    public JokeServiceImpl (JokeRepository jokeRepository) {
+        this.jokeRepository = jokeRepository;
+        this.ids = this.jokeRepository.findAllIds();
+    }
 
     @Override
     @Transactional
@@ -34,7 +41,12 @@ public class JokeServiceImpl implements JokeService {
             return "Текст анекдота не может быть пустым";
         }
         jokeRepository.save(JokeMapper.dtoToJoke(dto));
+        updateIds();
         return "Анекдот сохранен";
+    }
+
+    private void updateIds() {
+        ids = jokeRepository.findAllIds();
     }
 
     @Override
@@ -46,28 +58,38 @@ public class JokeServiceImpl implements JokeService {
             }
         }
         jokeRepository.saveAll(JokeMapper.dtosToJokes(jokeDtos));
+        updateIds();
     }
 
     @Override
     public String addJokesFromWebsite() {
         List<JokeDto> jokeDtos = parsingWebsite();
         addJokes(jokeDtos);
+        updateIds();
         return "Анекдоты добавлены в БД";
     }
 
     private List<JokeDto> parsingWebsite() {
         List<JokeDto> jokes = new ArrayList<>();
+        List<String> urls = List.of("https://www.anekdot.ru/author-best/years/?years=anekdot",
+                "https://www.anekdot.ru/author-best/years/?years=anekdot&page=2",
+                "https://www.anekdot.ru/author-best/years/?years=anekdot&page=3",
+                "https://www.anekdot.ru/author-best/years/?years=anekdot&page=4",
+                "https://www.anekdot.ru/author-best/years/?years=anekdot&page=5",
+                "https://www.anekdot.ru/author-best/years/?years=anekdot&page=6");
         try {
-            Document doc = Jsoup.connect("https://www.anekdot.ru/best/anekdot/0111/")
-                    .userAgent("Chrome/4.0.249.0 Safari/532.5")
-                    .referrer("https://www.google.com")
-                    .get();
-            Elements elements = doc.getElementsByClass("topicbox");
-            for (Element el : elements){
-                if (el.childNodeSize() >= 2 && el.attributesSize() > 1) {
-                    JokeDto dto = new JokeDto();
-                    dto.setTextJoke(modificationOfTheStringForAnAnecdote(el.child(1).text()));
-                    jokes.add(dto);
+            for (String url : urls) {
+                Document doc = Jsoup.connect(url)
+                        .userAgent("Chrome/4.0.249.0 Safari/532.5")
+                        .referrer("https://www.google.com")
+                        .get();
+                Elements elements = doc.getElementsByClass("topicbox");
+                for (Element el : elements) {
+                    if (el.childNodeSize() >= 2 && el.attributesSize() > 1) {
+                        JokeDto dto = new JokeDto();
+                        dto.setTextJoke(modificationOfTheStringForAnAnecdote(el.child(1).text()));
+                        jokes.add(dto);
+                    }
                 }
             }
         }
@@ -88,9 +110,8 @@ public class JokeServiceImpl implements JokeService {
     }
 
     private Long randomNumberId() {
-        List<Long> idJokes = jokeRepository.findAllIds();
-        if (idJokes.isEmpty()) return 0L;
-        return idJokes.get(new Random().nextInt(idJokes.size()));
+        if (ids.isEmpty()) return 0L;
+        return ids.get(new Random().nextInt(ids.size()));
     }
 
     private String modificationOfTheStringForAnAnecdote(String s) {

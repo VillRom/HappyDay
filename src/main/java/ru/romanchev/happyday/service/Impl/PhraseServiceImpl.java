@@ -71,6 +71,7 @@ public class PhraseServiceImpl implements PhraseService {
 
     @Override
     public PhraseDto getRandomPhrase() {
+        //TODO переделать метод по подобию в JokeServiceImpl
         if (phrasesRepository.count() == 0) {
             addPhrases(createPhrases(readFileWithPhrases(file)));
         }
@@ -79,13 +80,13 @@ public class PhraseServiceImpl implements PhraseService {
 
     @Override
     public String updatePhrases() {
-        long countPhrasesFromBd = phrasesRepository.count();
-        if (countPhrasesFromBd == 0) {
+        long maxId = phrasesRepository.getMaxId();
+        if (maxId == 0) {
             addPhrases(createPhrases(readFileWithPhrases(file)));
             return "Фразы добалены в БД";
         }
         List<String> phrases = readFileWithPhrases(file);
-        Phrase lastPhrase = phrasesRepository.findById(countPhrasesFromBd).orElseThrow();
+        Phrase lastPhrase = phrasesRepository.findById(maxId).orElseThrow();
         phrases.removeAll(phrases.subList(0, phrases.indexOf(lastPhrase.getTextPhrase()) + 1));
         if (phrases.isEmpty()) {
             return "Новые фразы не найдены";
